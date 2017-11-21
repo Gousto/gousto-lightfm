@@ -418,7 +418,7 @@ class LightFM(object):
             raise ValueError('Not all input values are finite. '
                              'Check the input for NaNs and infinite values.')
 
-    def fit(self, interactions,
+    def fit(self, interactions, scope=None,
             user_features=None, item_features=None,
             sample_weight=None,
             epochs=1, num_threads=1, verbose=False):
@@ -435,6 +435,8 @@ class LightFM(object):
              the matrix containing
              user-item interactions. Will be converted to
              numpy.float32 dtype if it is not of that type.
+        menus : np.int32 csr_matrix of shape [n_menus, n_recipes], optional
+             Each row contains boolean flags for the recipes a menu consists of.
         user_features: np.float32 csr_matrix of shape [n_users, n_user_features], optional
              Each row contains that user's weights over features.
         item_features: np.float32 csr_matrix of shape [n_items, n_item_features], optional
@@ -467,7 +469,7 @@ class LightFM(object):
         # Discard old results, if any
         self._reset_state()
 
-        return self.fit_partial(interactions,
+        return self.fit_partial(interactions, scope=scope,
                                 user_features=user_features,
                                 item_features=item_features,
                                 sample_weight=sample_weight,
@@ -475,7 +477,7 @@ class LightFM(object):
                                 num_threads=num_threads,
                                 verbose=verbose)
 
-    def fit_partial(self, interactions,
+    def fit_partial(self, interactions, scope=None,
                     user_features=None, item_features=None,
                     sample_weight=None,
                     epochs=1, num_threads=1, verbose=False):
@@ -495,6 +497,8 @@ class LightFM(object):
              the matrix containing
              user-item interactions. Will be converted to
              numpy.float32 dtype if it is not of that type.
+        scope : np.int32 csr_matrix of shape [n_menus, n_recipes], optional
+             Each row contains boolean flags for items in a certain scope.
         user_features: np.float32 csr_matrix of shape [n_users, n_user_features], optional
              Each row contains that user's weights over features.
         item_features: np.float32 csr_matrix of shape [n_items, n_item_features], optional
@@ -573,6 +577,7 @@ class LightFM(object):
             self._run_epoch(item_features,
                             user_features,
                             interactions,
+                            scope,
                             sample_weight_data,
                             num_threads,
                             self.loss)
@@ -581,7 +586,7 @@ class LightFM(object):
 
         return self
 
-    def _run_epoch(self, item_features, user_features, interactions,
+    def _run_epoch(self, item_features, user_features, interactions, scope,
                    sample_weight, num_threads, loss):
         """
         Run an individual epoch.
@@ -601,20 +606,26 @@ class LightFM(object):
 
         # Call the estimation routines.
         if loss == 'warp':
-            fit_warp(CSRMatrix(item_features),
-                     CSRMatrix(user_features),
-                     positives_lookup,
-                     interactions.row,
-                     interactions.col,
-                     interactions.data,
-                     sample_weight,
-                     shuffle_indices,
-                     lightfm_data,
-                     self.learning_rate,
-                     self.item_alpha,
-                     self.user_alpha,
-                     num_threads,
-                     self.random_state)
+
+            # Cycle over scopes
+            for i in range(scope.shape[0]):
+                scope_item_ids = scope[0].indices
+                
+                fit_warp(CSRMatrix(item_features),
+                         CSRMatrix(user_features),
+                         positives_lookup,
+                         interactions.row,
+                         interactions.col,
+                         interactions.data,
+                         scope_item_ids,
+                         sample_weight,
+                         shuffle_indices,
+                         lightfm_data,
+                         self.learning_rate,
+                         self.item_alpha,
+                         self.user_alpha,
+                         num_threads,
+                         self.random_state)
         elif loss == 'bpr':
             fit_bpr(CSRMatrix(item_features),
                     CSRMatrix(user_features),
