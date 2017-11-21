@@ -418,7 +418,7 @@ class LightFM(object):
             raise ValueError('Not all input values are finite. '
                              'Check the input for NaNs and infinite values.')
 
-    def fit(self, interactions, scope=None,
+    def fit(self, interactions, scope=None, match_indices=None,
             user_features=None, item_features=None,
             sample_weight=None,
             epochs=1, num_threads=1, verbose=False):
@@ -469,7 +469,9 @@ class LightFM(object):
         # Discard old results, if any
         self._reset_state()
 
-        return self.fit_partial(interactions, scope=scope,
+        return self.fit_partial(interactions, 
+                                scope=scope, 
+                                match_indices=match_indices,
                                 user_features=user_features,
                                 item_features=item_features,
                                 sample_weight=sample_weight,
@@ -477,7 +479,7 @@ class LightFM(object):
                                 num_threads=num_threads,
                                 verbose=verbose)
 
-    def fit_partial(self, interactions, scope=None,
+    def fit_partial(self, interactions, scope=None, match_indices=None,
                     user_features=None, item_features=None,
                     sample_weight=None,
                     epochs=1, num_threads=1, verbose=False):
@@ -578,6 +580,7 @@ class LightFM(object):
                             user_features,
                             interactions,
                             scope,
+                            match_indices,
                             sample_weight_data,
                             num_threads,
                             self.loss)
@@ -587,7 +590,7 @@ class LightFM(object):
         return self
 
     def _run_epoch(self, item_features, user_features, interactions, scope,
-                   sample_weight, num_threads, loss):
+                   match_indices, sample_weight, num_threads, loss):
         """
         Run an individual epoch.
         """
@@ -608,8 +611,10 @@ class LightFM(object):
         if loss == 'warp':
 
             # Cycle over scopes
+            # TODO catch scope=None and match_indices=None
             for i in range(scope.shape[0]):
-                scope_item_ids = scope[0].indices
+                
+                scope_item_indices = scope[i].indices
                 
                 fit_warp(CSRMatrix(item_features),
                          CSRMatrix(user_features),
@@ -617,7 +622,8 @@ class LightFM(object):
                          interactions.row,
                          interactions.col,
                          interactions.data,
-                         scope_item_ids,
+                         scope_item_indices,
+                         match_indices,
                          sample_weight,
                          shuffle_indices,
                          lightfm_data,
