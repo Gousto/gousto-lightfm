@@ -435,8 +435,12 @@ class LightFM(object):
              the matrix containing
              user-item interactions. Will be converted to
              numpy.float32 dtype if it is not of that type.
-        menus : np.int32 csr_matrix of shape [n_menus, n_recipes], optional
-             Each row contains boolean flags for the recipes a menu consists of.
+        scope: np.int32 csr_matrix of shape [n_scopes, n_active_items], optional
+             Each row contains boolean flags for the items in a scope that is a 
+             subset of all items active across the training horizon.
+        match_indices: np.int32 array of length [n_active_items], optional
+             Each element in the array gives the index of the active_item in
+             the array of all items (n_items). 
         user_features: np.float32 csr_matrix of shape [n_users, n_user_features], optional
              Each row contains that user's weights over features.
         item_features: np.float32 csr_matrix of shape [n_items, n_item_features], optional
@@ -499,8 +503,12 @@ class LightFM(object):
              the matrix containing
              user-item interactions. Will be converted to
              numpy.float32 dtype if it is not of that type.
-        scope : np.int32 csr_matrix of shape [n_menus, n_recipes], optional
-             Each row contains boolean flags for items in a certain scope.
+        scope: np.int32 csr_matrix of shape [n_scopes, n_active_items], optional
+             Each row contains boolean flags for the items in a scope that is a 
+             subset of all items active across the training horizon.
+        match_indices: np.int32 array of length [n_active_items], optional
+             Each element in the array gives the index of the active_item in
+             the array of all items (n_items). 
         user_features: np.float32 csr_matrix of shape [n_users, n_user_features], optional
              Each row contains that user's weights over features.
         item_features: np.float32 csr_matrix of shape [n_items, n_item_features], optional
