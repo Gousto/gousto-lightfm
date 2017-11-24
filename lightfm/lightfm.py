@@ -587,18 +587,19 @@ class LightFM(object):
             self._run_epoch(item_features,
                             user_features,
                             interactions,
-                            scope,
-                            match_indices,
                             sample_weight_data,
                             num_threads,
-                            self.loss)
+                            self.loss,
+                            scope,
+                            match_indices)
 
             self._check_finite()
 
         return self
 
-    def _run_epoch(self, item_features, user_features, interactions, scope,
-                   match_indices, sample_weight, num_threads, loss):
+    def _run_epoch(self, item_features, user_features, interactions,
+                   sample_weight, num_threads, loss, scope=None,
+                   match_indices=None,):
         """
         Run an individual epoch.
         """
@@ -617,13 +618,35 @@ class LightFM(object):
 
         # Call the estimation routines.
         if loss == 'warp':
-
             # Cycle over scopes
-            # TODO catch scope=None and match_indices=None
-            for i in range(scope.shape[0]):
-                
-                scope_item_indices = scope[i].indices
-                
+            if isinstance(scope, sp.csr_matrix) and isinstance(match_indices, np.ndarray): 
+                for i in range(scope.shape[0]):
+                    scope_item_indices = scope[i].indices
+
+                    fit_warp(CSRMatrix(item_features),
+                             CSRMatrix(user_features),
+                             positives_lookup,
+                             interactions.row,
+                             interactions.col,
+                             interactions.data,
+                             scope_item_indices,
+                             match_indices,
+                             sample_weight,
+                             shuffle_indices,
+                             lightfm_data,
+                             self.learning_rate,
+                             self.item_alpha,
+                             self.user_alpha,
+                             num_threads,
+                             self.random_state)
+            elif isinstance(scope, sp.csr_matrix) and not isinstance(match_indices, np.ndarray):
+                raise ValueError('Missing match_indices')
+            else:
+                # Extend scope and match_indices to be equal to all_recipes
+                # to revert to original LightFM sampling method
+                scope_item_indices = np.arange(item_features.shape[0], dtype=np.int32)
+                match_indices = scope_item_indices.copy()
+
                 fit_warp(CSRMatrix(item_features),
                          CSRMatrix(user_features),
                          positives_lookup,
@@ -640,6 +663,7 @@ class LightFM(object):
                          self.user_alpha,
                          num_threads,
                          self.random_state)
+
         elif loss == 'bpr':
             fit_bpr(CSRMatrix(item_features),
                     CSRMatrix(user_features),
@@ -655,6 +679,7 @@ class LightFM(object):
                     self.user_alpha,
                     num_threads,
                     self.random_state)
+
         elif loss == 'warp-kos':
             fit_warp_kos(CSRMatrix(item_features),
                          CSRMatrix(user_features),
@@ -669,6 +694,7 @@ class LightFM(object):
                          self.n,
                          num_threads,
                          self.random_state)
+
         else:
             fit_logistic(CSRMatrix(item_features),
                          CSRMatrix(user_features),
