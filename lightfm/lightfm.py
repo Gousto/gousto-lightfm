@@ -418,7 +418,7 @@ class LightFM(object):
             raise ValueError('Not all input values are finite. '
                              'Check the input for NaNs and infinite values.')
 
-    def fit(self, interactions,
+    def fit(self, interactions, scope=None, match_indices=None,
             user_features=None, item_features=None,
             sample_weight=None,
             epochs=1, num_threads=1, verbose=False):
@@ -435,6 +435,12 @@ class LightFM(object):
              the matrix containing
              user-item interactions. Will be converted to
              numpy.float32 dtype if it is not of that type.
+        scope: np.int32 csr_matrix of shape [n_scopes, n_active_items], optional
+             Each row contains boolean flags for the items in a scope that is a 
+             subset of all items active across the training horizon.
+        match_indices: np.int32 array of length [n_active_items], optional
+             Each element in the array gives the index of the active_item in
+             the array of all items (n_items). 
         user_features: np.float32 csr_matrix of shape [n_users, n_user_features], optional
              Each row contains that user's weights over features.
         item_features: np.float32 csr_matrix of shape [n_items, n_item_features], optional
@@ -467,7 +473,9 @@ class LightFM(object):
         # Discard old results, if any
         self._reset_state()
 
-        return self.fit_partial(interactions,
+        return self.fit_partial(interactions, 
+                                scope=scope, 
+                                match_indices=match_indices,
                                 user_features=user_features,
                                 item_features=item_features,
                                 sample_weight=sample_weight,
@@ -475,7 +483,7 @@ class LightFM(object):
                                 num_threads=num_threads,
                                 verbose=verbose)
 
-    def fit_partial(self, interactions,
+    def fit_partial(self, interactions, scope=None, match_indices=None,
                     user_features=None, item_features=None,
                     sample_weight=None,
                     epochs=1, num_threads=1, verbose=False):
@@ -495,6 +503,12 @@ class LightFM(object):
              the matrix containing
              user-item interactions. Will be converted to
              numpy.float32 dtype if it is not of that type.
+        scope: np.int32 csr_matrix of shape [n_scopes, n_active_items], optional
+             Each row contains boolean flags for the items in a scope that is a 
+             subset of all items active across the training horizon.
+        match_indices: np.int32 array of length [n_active_items], optional
+             Each element in the array gives the index of the active_item in
+             the array of all items (n_items). 
         user_features: np.float32 csr_matrix of shape [n_users, n_user_features], optional
              Each row contains that user's weights over features.
         item_features: np.float32 csr_matrix of shape [n_items, n_item_features], optional
@@ -575,14 +589,17 @@ class LightFM(object):
                             interactions,
                             sample_weight_data,
                             num_threads,
-                            self.loss)
+                            self.loss,
+                            scope,
+                            match_indices)
 
             self._check_finite()
 
         return self
 
     def _run_epoch(self, item_features, user_features, interactions,
-                   sample_weight, num_threads, loss):
+                   sample_weight, num_threads, loss, scope=None,
+                   match_indices=None,):
         """
         Run an individual epoch.
         """
@@ -601,20 +618,52 @@ class LightFM(object):
 
         # Call the estimation routines.
         if loss == 'warp':
-            fit_warp(CSRMatrix(item_features),
-                     CSRMatrix(user_features),
-                     positives_lookup,
-                     interactions.row,
-                     interactions.col,
-                     interactions.data,
-                     sample_weight,
-                     shuffle_indices,
-                     lightfm_data,
-                     self.learning_rate,
-                     self.item_alpha,
-                     self.user_alpha,
-                     num_threads,
-                     self.random_state)
+            # Cycle over scopes
+            if isinstance(scope, sp.csr_matrix) and isinstance(match_indices, np.ndarray): 
+                for i in range(scope.shape[0]):
+                    scope_item_indices = scope[i].indices
+
+                    fit_warp(CSRMatrix(item_features),
+                             CSRMatrix(user_features),
+                             positives_lookup,
+                             interactions.row,
+                             interactions.col,
+                             interactions.data,
+                             scope_item_indices,
+                             match_indices,
+                             sample_weight,
+                             shuffle_indices,
+                             lightfm_data,
+                             self.learning_rate,
+                             self.item_alpha,
+                             self.user_alpha,
+                             num_threads,
+                             self.random_state)
+            elif isinstance(scope, sp.csr_matrix) and not isinstance(match_indices, np.ndarray):
+                raise ValueError('Missing match_indices')
+            else:
+                # Extend scope and match_indices to be equal to all_recipes
+                # to revert to original LightFM sampling method
+                scope_item_indices = np.arange(item_features.shape[0], dtype=np.int32)
+                match_indices = scope_item_indices.copy()
+
+                fit_warp(CSRMatrix(item_features),
+                         CSRMatrix(user_features),
+                         positives_lookup,
+                         interactions.row,
+                         interactions.col,
+                         interactions.data,
+                         scope_item_indices,
+                         match_indices,
+                         sample_weight,
+                         shuffle_indices,
+                         lightfm_data,
+                         self.learning_rate,
+                         self.item_alpha,
+                         self.user_alpha,
+                         num_threads,
+                         self.random_state)
+
         elif loss == 'bpr':
             fit_bpr(CSRMatrix(item_features),
                     CSRMatrix(user_features),
@@ -630,6 +679,7 @@ class LightFM(object):
                     self.user_alpha,
                     num_threads,
                     self.random_state)
+
         elif loss == 'warp-kos':
             fit_warp_kos(CSRMatrix(item_features),
                          CSRMatrix(user_features),
@@ -644,6 +694,7 @@ class LightFM(object):
                          self.n,
                          num_threads,
                          self.random_state)
+
         else:
             fit_logistic(CSRMatrix(item_features),
                          CSRMatrix(user_features),

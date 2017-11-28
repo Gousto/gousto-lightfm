@@ -787,6 +787,8 @@ def fit_warp(CSRMatrix item_features,
              int[::1] user_ids,
              int[::1] item_ids,
              flt[::1] Y,
+             int[::1] scope_item_indices,
+             int[::1] match_indices,
              flt[::1] sample_weight,
              int[::1] shuffle_indices,
              FastLightFM lightfm,
@@ -800,7 +802,7 @@ def fit_warp(CSRMatrix item_features,
     """
 
     cdef int i, no_examples, user_id, positive_item_id, gamma
-    cdef int negative_item_id, sampled, row
+    cdef int negative_item_index, negative_item_id, sampled, row
     cdef double positive_prediction, negative_prediction
     cdef double loss, MAX_LOSS
     cdef flt weight
@@ -857,9 +859,9 @@ def fit_warp(CSRMatrix item_features,
             while sampled < lightfm.max_sampled:
 
                 sampled = sampled + 1
-                negative_item_id = (rand_r(&random_states[{thread_num}])
-                                    % item_features.rows)
-                print("Negative item id sampled")
+                negative_item_index = (rand_r(&random_states[{thread_num}])
+                                    % len(scope_item_indices))
+                negative_item_id = match_indices[scope_item_indices[negative_item_index]]
 
                 compute_representation(item_features,
                                        lightfm.item_features,
